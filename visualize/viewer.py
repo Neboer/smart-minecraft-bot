@@ -325,10 +325,10 @@ class WorldWindow(mglw.WindowConfig):
             scale = (1.0, 1.0, 1.0)
 
             if block_type == BlockType.PLANK.value:
-                color = (0.55, 0.27, 0.07)
+                color = (0.72, 0.45, 0.18)
                 self._render_items.append(RenderItem(position, scale, color, False))
             elif block_type == BlockType.LEAF.value:
-                color = (0.2, 0.7, 0.2)
+                color = (0.1, 0.8, 0.1)
                 self._render_items.append(RenderItem(position, scale, color, False))
             elif block_type == BlockType.SAPLING.value:
                 color = (0.1, 0.8, 0.1)
@@ -369,7 +369,7 @@ class WorldWindow(mglw.WindowConfig):
         self._cube_vao.render()
 
     def on_render(self, time: float, frame_time: float) -> None:
-        self.ctx.clear(1.0, 1.0, 1.0)
+        self.ctx.clear(0.1, 0.1, 0.1)
         view, proj = self._camera_matrices()
 
         self._tick_accumulator += frame_time

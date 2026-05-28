@@ -126,12 +126,19 @@ class World:
             if z != 0:
                 continue
 
+            if any((player.x, player.y, player.z) == pos for player in self.players.values()):
+                continue
+
             has_neighbor = False
+            neighbor_xy = {(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)}
             for other_pos in self.game_state.blocks.keys():
                 if other_pos == pos:
                     continue
                 ox, oy, oz = other_pos
-                if abs(ox - x) + abs(oy - y) + abs(oz - z) <= 4:
+                if (ox, oy) == (x, y):
+                    has_neighbor = True
+                    break
+                if (ox, oy) in neighbor_xy:
                     has_neighbor = True
                     break
 

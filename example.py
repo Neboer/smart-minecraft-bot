@@ -28,9 +28,9 @@ def main() -> None:
     world_lock = threading.Lock()
 
     with world_lock:
-        game.world.add_block(BlockType.PLANK, 2, 2, 0)
-        game.world.add_block(BlockType.PLANK, 2, 2, 1)
-        game.world.add_block(BlockType.LEAF, 2, 2, 2)
+        # game.world.add_block(BlockType.PLANK, 2, 2, 0)
+        # game.world.add_block(BlockType.PLANK, 2, 2, 1)
+        # game.world.add_block(BlockType.LEAF, 2, 2, 2)
         game.world.add_block(BlockType.SAPLING, 1, 3, 0)
 
     render_thread = threading.Thread(
