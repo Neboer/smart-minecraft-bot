@@ -2,98 +2,77 @@
 """
 Example script demonstrating game API usage
 """
+
 import sys
 import os
+import threading
+import time
+from itertools import cycle
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from game.game import Game
+from game.core import BlockType
 from game.api import PlayerAPI
+from visualize import run_visualizer
 
-def main():
-    print("=== Smart Bot Game Example ===\n")
-    
-    # Create world and player
-    print("1. Creating world and player...")
+
+def main() -> None:
+    print("=== Smart Bot Game Visual Example ===\n")
+
     game = Game()
-    player_id, player = game.world.create_player()
-    api = PlayerAPI(game, player_id)
-    
-    print(f"   Player ID: {player_id}")
-    print(f"   Initial position: {api.get_position()}")
-    print(f"   Initial direction: {api.get_direction()}")
-    print(f"   Initial inventory: {api.get_inventory()}")
-    
-    # Move forward
-    print("\n2. Moving forward...")
-    result = api.move_forward()
-    if result["success"]:
-        print("   ✓ Moved forward successfully")
-        print(f"   New position: {api.get_position()}")
-    else:
-        print(f"   ✗ Failed to move: {result['error']}")
-    
-    # Turn north
-    print("\n3. Turning north...")
-    result = api.turn("north")
-    if result["success"]:
-        print("   ✓ Turned north successfully")
-        print(f"   New direction: {api.get_direction()}")
-    else:
-        print(f"   ✗ Failed to turn: {result['error']}")
-    
-    # Place sapling (should fail - no block adjacent)
-    print("\n4. Trying to place sapling (should fail - no adjacent block)...")
-    result = api.place_block("sapling")
-    if result["success"]:
-        print("   ✓ Placed sapling successfully")
-    else:
-        print(f"   ✗ Failed to place: {result['error']}")
-    
-    # Check world state
-    print("\n5. Checking world state...")
-    world_state = api.get_world_state()
-    print(f"   World tick: {world_state['tick']}")
-    print(f"   Number of blocks: {len(world_state['blocks'])}")
-    print(f"   Number of players: {len(world_state['players'])}")
-    
-    # Get nearby blocks
-    print("\n6. Getting nearby blocks...")
-    nearby = api.get_nearby_blocks(radius=2)
-    print(f"   Blocks within radius 2: {len(nearby['blocks'])}")
-    
-    # Swap inventory slots
-    print("\n7. Swapping inventory slots 0 and 1...")
-    result = api.swap_inventory_slots(0, 1)
-    if result["success"]:
-        print("   ✓ Swapped slots successfully")
-        print(f"   New inventory: {api.get_inventory()}")
-    else:
-        print(f"   ✗ Failed to swap: {result['error']}")
-    
-    # Swap back
-    print("\n8. Swapping back to original positions...")
-    api.swap_inventory_slots(0, 1)
-    
-    print("\n=== Example completed ===")
-    print("\nPlayer API provides the following methods:")
-    print("- move_forward()")
-    print("- turn(direction)")
-    print("- start_breaking(x, y, z)")
-    print("- continue_breaking()")
-    print("- place_block(block_type)")
-    print("- craft_axe()")
-    print("- swap_inventory_slots(slot1, slot2)")
-    print("- get_inventory()")
-    print("- get_player_state()")
-    print("- get_world_state()")
-    print("- get_nearby_blocks(radius)")
-    print("- get_facing_position()")
-    print("- get_position()")
-    print("- get_direction()")
-    print("- get_height()")
-    print("- get_main_hand_item()")
+    player_id, player_entity = game.world.create_player()
+    player = PlayerAPI(game, player_id)
+
+    world_lock = threading.Lock()
+
+    with world_lock:
+        game.world.add_block(BlockType.PLANK, 2, 2, 0)
+        game.world.add_block(BlockType.PLANK, 2, 2, 1)
+        game.world.add_block(BlockType.LEAF, 2, 2, 2)
+        game.world.add_block(BlockType.SAPLING, 1, 3, 0)
+
+    render_thread = threading.Thread(
+        target=run_visualizer,
+        args=(game.world, player_entity, None, world_lock),
+        daemon=True,
+    )
+    render_thread.start()
+
+    actions = cycle([
+        ("move forward", lambda: player.move_forward()),
+        ("move forward", lambda: player.move_forward()),
+        ("turn south", lambda: player.turn("south")),
+        ("move forward", lambda: player.move_forward()),
+        ("turn west", lambda: player.turn("west")),
+        ("move forward", lambda: player.move_forward()),
+        ("turn north", lambda: player.turn("north")),
+        ("move forward", lambda: player.move_forward()),
+    ])
+
+    tick_index = 0
+    print("Renderer started on another thread. Running one action per second...\n")
+
+    try:
+        while True:
+            tick_index += 1
+            action_name, action_fn = next(actions)
+            with world_lock:
+                result = action_fn()
+                position = player.get_position()["position"]
+                direction = player.get_direction()["direction"]
+            success = result.get("success", False)
+            status = "✓" if success else "✗"
+            error = f" (error: {result.get('error')})" if not success else ""
+            print(
+                f"[tick {tick_index:02d}] {status} {action_name}{error} -> "
+                f"pos={position}, dir={direction}"
+            )
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+
 
 if __name__ == "__main__":
     main()

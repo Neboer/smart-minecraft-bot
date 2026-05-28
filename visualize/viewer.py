@@ -14,6 +14,7 @@ from game.world import World
 from game.player import Player
 from game.game import Game
 
+import threading
 
 Vec3 = Tuple[float, float, float]
 Mat4 = List[float]
@@ -202,14 +203,21 @@ class WorldWindow(mglw.WindowConfig):
     gl_version = (3, 3)
     title = "Smart Bot World"
     window_size = (960, 720)
+    target_fps = 10
     resource_dir = None
 
     world: Optional[World] = None
     player: Optional[Player] = None
     game: Optional[Game] = None
+    world_lock: Optional[threading.Lock] = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        if self.world_lock is None:
+            self.world_lock = threading.Lock()
+        self._auto_refresh = self.game is None
+
         self.ctx.enable(moderngl.DEPTH_TEST)
 
         self._start_time = time.time()
@@ -288,7 +296,8 @@ class WorldWindow(mglw.WindowConfig):
         )
 
         self._render_items: List[RenderItem] = []
-        self._rebuild_scene()
+        with self.world_lock:
+            self._rebuild_scene()
 
     def _get_world_size(self) -> float:
         if self.world is None:
@@ -332,6 +341,17 @@ class WorldWindow(mglw.WindowConfig):
             scale = (1.0, 1.0, 2.0)
             self._render_items.append(RenderItem(position, scale, (0.85, 0.1, 0.1), False))
 
+            facing_dx, facing_dy, _ = self.player.direction.value
+            thickness = 0.08
+            offset = 0.5 + thickness / 2.0
+            if abs(facing_dx) > 0:
+                face_position = (px + 0.5 + facing_dx * offset, py + 0.5, pz + 1.0)
+                face_scale = (thickness, 1.0, 2.0)
+            else:
+                face_position = (px + 0.5, py + 0.5 + facing_dy * offset, pz + 1.0)
+                face_scale = (1.0, thickness, 2.0)
+            self._render_items.append(RenderItem(face_position, face_scale, (0.1, 0.3, 0.9), False))
+
     def _draw_item(self, item: RenderItem, view: Mat4, proj: Mat4) -> None:
         model = _mat4_mul(_mat4_translate(*item.position), _mat4_scale(*item.scale))
         mvp = _mat4_mul(proj, _mat4_mul(view, model))
@@ -355,10 +375,14 @@ class WorldWindow(mglw.WindowConfig):
 
         self._tick_accumulator += frame_time
         if self.game is not None and self._tick_accumulator >= 1.0:
-            while self._tick_accumulator >= 1.0:
-                self.game.tick()
-                self._tick_accumulator -= 1.0
-            self._rebuild_scene()
+            with self.world_lock:
+                while self._tick_accumulator >= 1.0:
+                    self.game.tick()
+                    self._tick_accumulator -= 1.0
+                self._rebuild_scene()
+        elif self._auto_refresh:
+            with self.world_lock:
+                self._rebuild_scene()
 
         ground_model = _mat4_mul(_mat4_translate(self._get_world_size() / 2.0 - 0.5,
                                                 self._get_world_size() / 2.0 - 0.5,
@@ -374,12 +398,19 @@ class WorldWindow(mglw.WindowConfig):
         self._program["ambient_color"].value = (0.3, 0.3, 0.3)
         self._ground_vao.render()
 
-        for item in self._render_items:
-            self._draw_item(item, view, proj)
+        with self.world_lock:
+            for item in self._render_items:
+                self._draw_item(item, view, proj)
 
 
-def run_visualizer(world: World, player: Player, game: Optional[Game] = None) -> None:
+def run_visualizer(
+    world: World,
+    player: Player,
+    game: Optional[Game] = None,
+    world_lock: Optional[threading.Lock] = None,
+) -> None:
     WorldWindow.world = world
     WorldWindow.player = player
     WorldWindow.game = game
+    WorldWindow.world_lock = world_lock or threading.Lock()
     mglw.run_window_config(WorldWindow)
