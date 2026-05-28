@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from ..player import Player
 from ..world import World
 from ..game import Game
@@ -6,7 +6,7 @@ from ..game import Game
 class PlayerAPI:
     """API interface for player actions"""
     
-    def __init__(self, game_or_world: World, player_id: str):
+    def __init__(self, game_or_world: Union[World, Game], player_id: str):
         if isinstance(game_or_world, Game):
             self.game = game_or_world
             self.world = self.game.world
