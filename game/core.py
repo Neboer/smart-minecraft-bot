@@ -103,7 +103,11 @@ class InventorySlot:
 class GameState:
     def __init__(self):
         self.world_size = 5
-        self.world_center = (0, 0, 2)
+        self.world_center = (
+            self.world_size // 2,
+            self.world_size // 2,
+            self.world_size // 2,
+        )
         self.blocks: Dict[Tuple[int, int, int], Block] = {}
         self.tick_count = 0
         

@@ -186,15 +186,14 @@ def _build_cube_edges() -> array:
 
 
 def _build_ground_vertices(size: float) -> array:
-    half = size / 2.0
     z = -0.01
     data = [
-        -half, -half, z, 0.0, 0.0, 1.0,
-        half, -half, z, 0.0, 0.0, 1.0,
-        half, half, z, 0.0, 0.0, 1.0,
-        -half, -half, z, 0.0, 0.0, 1.0,
-        half, half, z, 0.0, 0.0, 1.0,
-        -half, half, z, 0.0, 0.0, 1.0,
+        0.0, 0.0, z, 0.0, 0.0, 1.0,
+        size, 0.0, z, 0.0, 0.0, 1.0,
+        size, size, z, 0.0, 0.0, 1.0,
+        0.0, 0.0, z, 0.0, 0.0, 1.0,
+        size, size, z, 0.0, 0.0, 1.0,
+        0.0, size, z, 0.0, 0.0, 1.0,
     ]
     return array("f", data)
 
@@ -384,12 +383,7 @@ class WorldWindow(mglw.WindowConfig):
             with self.world_lock:
                 self._rebuild_scene()
 
-        ground_model = _mat4_mul(_mat4_translate(self._get_world_size() / 2.0 - 0.5,
-                                                self._get_world_size() / 2.0 - 0.5,
-                                                0.0),
-                                 _mat4_scale(self._get_world_size(),
-                                             self._get_world_size(),
-                                             1.0))
+        ground_model = _mat4_identity()
         ground_mvp = _mat4_mul(proj, _mat4_mul(view, ground_model))
         self._program["mvp"].write(_pack_mat4(ground_mvp))
         self._program["model"].write(_pack_mat4(ground_model))

@@ -1,0 +1,3 @@
+moderngl-window
+moderngl
+numpy

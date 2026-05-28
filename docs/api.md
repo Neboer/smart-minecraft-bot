@@ -204,7 +204,9 @@ Get the item in main hand (slot 0).
 
 ### World
 - 5x5x5 grid world
-- Center at (0, 0, 2)
+- Origin at (0, 0, 0) in a fixed corner
+- Coordinate range: 0 <= x,y,z <= 4
+- Center at (2, 2, 2)
 - Discrete time (ticks)
 - Tree growth: Saplings have 10% chance per tick to grow into trees if isolated
 
