@@ -1,7 +1,6 @@
 from enum import Enum
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Callable, Any
 from dataclasses import dataclass
-import random
 
 class Direction(Enum):
     EAST = (1, 0, 0)
@@ -43,6 +42,15 @@ class BlockType(Enum):
     SAPLING = "sapling"
     PLANK = "plank"
     LEAF = "leaf"
+
+    def to_item_type(self) -> "ItemType":
+        if self == BlockType.SAPLING:
+            return ItemType.SAPLING
+        if self == BlockType.PLANK:
+            return ItemType.PLANK
+        if self == BlockType.LEAF:
+            return ItemType.SAPLING
+        return ItemType.SAPLING
 
 @dataclass
 class Block:
@@ -126,44 +134,26 @@ class GameState:
             if (nx, ny, nz) in self.blocks:
                 return True
         return False
-    
-    def process_tick(self):
-        """Process one tick of world simulation"""
-        self.tick_count += 1
-        self._process_tree_growth()
-    
-    def _process_tree_growth(self):
-        """Process sapling growth into trees"""
-        saplings = [(pos, block) for pos, block in self.blocks.items() 
-                   if block.block_type == BlockType.SAPLING]
-        
-        for pos, sapling in saplings:
-            x, y, z = pos
-            # Check if sapling is at ground level (height 0)
-            if z != 0:
-                continue
-            
-            # Check if there are no other blocks within 4 blocks (Manhattan distance)
-            has_neighbor = False
-            for other_pos, other_block in self.blocks.items():
-                if other_pos == pos:
-                    continue
-                ox, oy, oz = other_pos
-                if abs(ox - x) + abs(oy - y) + abs(oz - z) <= 4:
-                    has_neighbor = True
-                    break
-            
-            if has_neighbor:
-                continue
-            
-            # 10% chance to grow into tree
-            if random.random() < 0.1:
-                # Remove sapling
-                self.remove_block(x, y, z)
-                # Create tree: 2-4 planks vertically + 1 leaf on top
-                trunk_height = random.randint(2, 4)
-                for h in range(trunk_height):
-                    plank = Block(BlockType.PLANK, x, y, z + h)
-                    self.add_block(plank)
-                leaf = Block(BlockType.LEAF, x, y, z + trunk_height)
-                self.add_block(leaf)
+
+
+@dataclass
+class Mutation:
+    description: str
+    probability: float
+    apply: Callable[[], Dict[str, Any]]
+
+
+@dataclass
+class MutationGroup:
+    mutations: List[Mutation]
+    name: Optional[str] = None
+
+
+@dataclass
+class WorldMutations:
+    groups: List[MutationGroup]
+
+
+@dataclass
+class MutationSequence:
+    mutations: List[Mutation]

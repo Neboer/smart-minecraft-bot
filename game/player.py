@@ -1,5 +1,5 @@
-from typing import List, Dict, Tuple, Optional, Any
-from .core import Direction, ItemType, BlockType, Item, InventorySlot, Block, GameState
+from typing import List, Dict, Tuple, Optional, Any, Callable
+from .core import Direction, ItemType, BlockType, Item, InventorySlot, Block, GameState, Mutation, MutationGroup
 
 
 class Player:
@@ -36,6 +36,14 @@ class Player:
     def main_hand_item(self) -> Optional[Item]:
         return self.inventory[self.main_hand_slot].item
 
+    def _build_action_mutation_group(self, description: str, apply_fn: Callable[[], Dict[str, Any]]) -> MutationGroup:
+        return MutationGroup(
+            mutations=[
+                Mutation(description=description, probability=1.0, apply=apply_fn)
+            ],
+            name="player_action",
+        )
+
     def swap_inventory_slots(self, slot1: int, slot2: int) -> Dict[str, Any]:
         """Swap items between two inventory slots. Does not consume tick."""
         if not (
@@ -44,12 +52,20 @@ class Player:
         ):
             return {"success": False, "error": "Invalid slot index"}
 
-        # Swap the items
-        self.inventory[slot1].item, self.inventory[slot2].item = (
-            self.inventory[slot2].item,
-            self.inventory[slot1].item,
-        )
-        return {"success": True}
+        def apply_swap():
+            self.inventory[slot1].item, self.inventory[slot2].item = (
+                self.inventory[slot2].item,
+                self.inventory[slot1].item,
+            )
+            return {"success": True}
+
+        return {
+            "success": True,
+            "mutation_group": self._build_action_mutation_group(
+                f"Swap inventory slots {slot1} and {slot2}",
+                apply_swap,
+            ),
+        }
 
     def get_facing_block_position(self) -> Tuple[int, int, int]:
         """Get the position of the block in front of the player"""
@@ -91,8 +107,18 @@ class Player:
         if not self.can_move_to(new_x, new_y, new_z):
             return {"success": False, "error": "Cannot move to target position"}
 
-        self.x, self.y, self.z = new_x, new_y, new_z
-        return {"success": True, "consumed_tick": True}
+        def apply_move():
+            self.x, self.y, self.z = new_x, new_y, new_z
+            return {"success": True}
+
+        return {
+            "success": True,
+            "consumed_tick": True,
+            "mutation_group": self._build_action_mutation_group(
+                f"Move player to ({new_x}, {new_y}, {new_z})",
+                apply_move,
+            ),
+        }
 
     def turn_to(self, direction_name: str) -> Dict[str, Any]:
         """Turn to face a direction. Costs 1 tick."""
@@ -101,11 +127,18 @@ class Player:
         except ValueError:
             return {"success": False, "error": "Invalid direction"}
 
-        if new_direction == self.direction:
-            return {"success": True, "consumed_tick": True}
+        def apply_turn():
+            self.direction = new_direction
+            return {"success": True}
 
-        self.direction = new_direction
-        return {"success": True, "consumed_tick": True}
+        return {
+            "success": True,
+            "consumed_tick": True,
+            "mutation_group": self._build_action_mutation_group(
+                f"Turn player to {new_direction.name.lower()}",
+                apply_turn,
+            ),
+        }
 
     def _get_break_time(self, block_type: BlockType) -> float:
         """Get base break time for a block type"""
@@ -140,8 +173,6 @@ class Player:
             self.breaking_block = None
             self.break_progress = 0.0
 
-        self.breaking_block = target_pos
-
         # Calculate break time
         break_time = self._get_break_time(block.block_type)
 
@@ -153,60 +184,42 @@ class Player:
         ):
             break_time /= 2.0
 
-        self.break_target_time = break_time
-        return {"success": True, "consumed_tick": True}
+        def apply_start_break():
+            if self.breaking_block and self.breaking_block != target_pos:
+                self.breaking_block = None
+                self.break_progress = 0.0
+
+            if self.breaking_block != target_pos:
+                self.break_progress = 0.0
+
+            self.breaking_block = target_pos
+            self.break_target_time = break_time
+            return {"success": True}
+
+        return {
+            "success": True,
+            "consumed_tick": True,
+            "mutation_group": self._build_action_mutation_group(
+                f"Start breaking block at {target_pos}",
+                apply_start_break,
+            ),
+        }
 
     def continue_breaking_block(self) -> Dict[str, Any]:
         """Continue breaking the current block. Costs 1 tick."""
         if not self.breaking_block:
             return {"success": False, "error": "Not breaking any block"}
 
-        self.break_progress += 1.0
+        def apply_continue_break():
+            return {"success": True}
 
-        if self.break_progress >= self.break_target_time:
-            # Block is broken
-            x, y, z = self.breaking_block
-            block = self.game_state.remove_block(x, y, z)
-
-            if block:
-                # Generate drops
-                drops = self._generate_drops(block)
-                self.breaking_block = None
-                self.break_progress = 0.0
-
-                # Add drops to inventory
-                for drop_type, drop_count in drops:
-                    added = self._add_item_to_inventory(drop_type, drop_count)
-                    if not added:
-                        # If inventory is full, we could drop items, but for simplicity just fail
-                        return {
-                            "success": False,
-                            "error": "Inventory full, cannot pick up drops",
-                        }
-
-                # If breaking below player, decrease player height
-                if (x, y, z) == self.get_position_below():
-                    self.z -= 1
-
-                return {"success": True, "consumed_tick": True, "drops": drops}
-            else:
-                return {"success": False, "error": "Block not found"}
-
-        return {"success": True, "consumed_tick": True}
-
-    def _generate_drops(self, block: Block) -> List[Tuple[ItemType, int]]:
-        """Generate drops from a broken block"""
-        import random
-
-        if block.block_type == BlockType.SAPLING:
-            return [(ItemType.SAPLING, 1)]
-        elif block.block_type == BlockType.PLANK:
-            return [(ItemType.PLANK, 1)]
-        elif block.block_type == BlockType.LEAF:
-            # 1-3 saplings
-            count = random.randint(1, 3)
-            return [(ItemType.SAPLING, count)]
-        return []
+        return {
+            "success": True,
+            "consumed_tick": True,
+            "mutation_group": self._build_action_mutation_group(
+                "Continue breaking", apply_continue_break
+            ),
+        }
 
     def _add_item_to_inventory(self, item_type: ItemType, count: int) -> bool:
         """Add item to inventory, returns True if successful"""
@@ -282,14 +295,14 @@ class Player:
                     if z != 0:
                         continue
                     # Check if there's space for player height increase
-                    if block_type.has_entity:
+                    if Block(block_type, x, y, z).has_entity:
                         # Check if there's space above player for height increase
                         above_player = (self.x, self.y, self.z + self.height)
                         if self.game_state.get_block(*above_player):
                             continue
                 else:
                     # For other blocks, check if player can stand on them
-                    if block_type.has_entity:
+                    if Block(block_type, x, y, z).has_entity:
                         # Check if there's space above player for height increase
                         above_player = (self.x, self.y, self.z + self.height)
                         if self.game_state.get_block(*above_player):
@@ -301,17 +314,31 @@ class Player:
 
             # Place the block
             new_block = Block(block_type, x, y, z)
-            if self.game_state.add_block(new_block):
-                # Remove item from inventory
-                self.main_hand_item.count -= 1
-                if self.main_hand_item.count <= 0:
-                    self.inventory[self.main_hand_slot].item = None
+            if self.game_state.get_block(x, y, z) is None:
+                def apply_place():
+                    if self.game_state.add_block(new_block):
+                        main_hand_item = self.inventory[self.main_hand_slot].item
+                        if not main_hand_item:
+                            return {"success": False, "error": "Main hand item missing"}
 
-                # Special case: placing below player with entity increases height
-                if pos == below and block_type.has_entity:
-                    self.z += 1
+                        main_hand_item.count -= 1
+                        if main_hand_item.count <= 0:
+                            self.inventory[self.main_hand_slot].item = None
 
-                return {"success": True, "consumed_tick": True, "position": pos}
+                        if pos == below and new_block.has_entity:
+                            self.z += 1
+                        return {"success": True, "position": pos}
+                    return {"success": False, "error": "Failed to place block"}
+
+                return {
+                    "success": True,
+                    "consumed_tick": True,
+                    "position": pos,
+                    "mutation_group": self._build_action_mutation_group(
+                        f"Place {block_type.value} at {pos}",
+                        apply_place,
+                    ),
+                }
 
         return {"success": False, "error": "Cannot place block at any valid position"}
 
@@ -331,25 +358,35 @@ class Player:
             if slot.is_empty() or (
                 slot.item and slot.item.item_type == ItemType.WOODEN_AXE
             ):
-                # Remove 3 planks
-                remaining = 3
-                for inv_slot in self.inventory:
-                    if remaining <= 0:
-                        break
-                    if inv_slot.item and inv_slot.item.item_type == ItemType.PLANK:
-                        to_remove = min(remaining, inv_slot.item.count)
-                        inv_slot.item.count -= to_remove
-                        remaining -= to_remove
-                        if inv_slot.item.count <= 0:
-                            inv_slot.item = None
+                def apply_craft():
+                    remaining = 3
+                    for inv_slot in self.inventory:
+                        if remaining <= 0:
+                            break
+                        if inv_slot.item and inv_slot.item.item_type == ItemType.PLANK:
+                            to_remove = min(remaining, inv_slot.item.count)
+                            inv_slot.item.count -= to_remove
+                            remaining -= to_remove
+                            if inv_slot.item.count <= 0:
+                                inv_slot.item = None
 
-                # Add wooden axe
-                if slot.is_empty():
-                    slot.item = Item(ItemType.WOODEN_AXE, 1)
-                else:
-                    slot.item.count += 1
+                    if slot.is_empty():
+                        slot.item = Item(ItemType.WOODEN_AXE, 1)
+                    else:
+                        if not slot.item:
+                            return {"success": False, "error": "Target slot missing"}
+                        slot.item.count += 1
 
-                return {"success": True, "consumed_ticks": 2}
+                    return {"success": True}
+
+                return {
+                    "success": True,
+                    "consumed_ticks": 2,
+                    "mutation_group": self._build_action_mutation_group(
+                        "Craft wooden axe",
+                        apply_craft,
+                    ),
+                }
 
         return {"success": False, "error": "No space for axe in inventory"}
 
@@ -357,14 +394,15 @@ class Player:
         """Get current inventory state"""
         result = []
         for i, slot in enumerate(self.inventory):
-            if slot.is_empty():
+            item = slot.item
+            if not item or item.count <= 0:
                 result.append({"slot": i, "empty": True})
             else:
                 result.append(
                     {
                         "slot": i,
-                        "item_type": slot.item.item_type.value,
-                        "count": slot.item.count,
+                        "item_type": item.item_type.value,
+                        "count": item.count,
                         "is_main_hand": i == self.main_hand_slot,
                     }
                 )

@@ -1,14 +1,21 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 from ..player import Player
 from ..world import World
+from ..game import Game
 
 class PlayerAPI:
     """API interface for player actions"""
     
-    def __init__(self, world: World, player_id: str):
-        self.world = world
+    def __init__(self, game_or_world: World, player_id: str):
+        if isinstance(game_or_world, Game):
+            self.game = game_or_world
+            self.world = self.game.world
+        else:
+            self.world = game_or_world
+            self.game = Game(self.world)
+
         self.player_id = player_id
-        self.player = world.get_player(player_id)
+        self.player = self.world.get_player(player_id)
         if not self.player:
             raise ValueError(f"Player {player_id} not found")
     
@@ -16,49 +23,60 @@ class PlayerAPI:
         """Move forward one block in current direction. Costs 1 tick."""
         result = self.player.move_forward()
         if result.get("success") and result.get("consumed_tick"):
-            self.world.process_tick()
+            tick_result = self.game.tick(result.get("mutation_group"))
+            result["tick_result"] = tick_result
         return result
     
     def turn(self, direction: str) -> Dict[str, Any]:
         """Turn to face a direction (north, south, east, west). Costs 1 tick."""
         result = self.player.turn_to(direction)
         if result.get("success") and result.get("consumed_tick"):
-            self.world.process_tick()
+            tick_result = self.game.tick(result.get("mutation_group"))
+            result["tick_result"] = tick_result
         return result
     
     def start_breaking(self, x: int, y: int, z: int) -> Dict[str, Any]:
         """Start breaking a block at position. Costs 1 tick."""
         result = self.player.start_breaking_block(x, y, z)
         if result.get("success") and result.get("consumed_tick"):
-            self.world.process_tick()
+            tick_result = self.game.tick(result.get("mutation_group"))
+            result["tick_result"] = tick_result
         return result
     
     def continue_breaking(self) -> Dict[str, Any]:
         """Continue breaking the current block. Costs 1 tick."""
         result = self.player.continue_breaking_block()
         if result.get("success") and result.get("consumed_tick"):
-            self.world.process_tick()
+            tick_result = self.game.tick(result.get("mutation_group"))
+            result["tick_result"] = tick_result
         return result
     
     def place_block(self, block_type: str) -> Dict[str, Any]:
         """Place a block from main hand. Costs 1 tick."""
         result = self.player.place_block(block_type)
         if result.get("success") and result.get("consumed_tick"):
-            self.world.process_tick()
+            tick_result = self.game.tick(result.get("mutation_group"))
+            result["tick_result"] = tick_result
         return result
     
     def craft_axe(self) -> Dict[str, Any]:
         """Craft a wooden axe from 3 planks. Costs 2 ticks."""
         result = self.player.craft_axe()
         if result.get("success") and "consumed_ticks" in result:
-            # Consume the specified number of ticks
-            for _ in range(result["consumed_ticks"]):
-                self.world.process_tick()
+            tick_results = []
+            tick_results.append(self.game.tick(result.get("mutation_group")))
+            for _ in range(result["consumed_ticks"] - 1):
+                tick_results.append(self.game.tick())
+            result["tick_result"] = tick_results
         return result
     
     def swap_inventory_slots(self, slot1: int, slot2: int) -> Dict[str, Any]:
         """Swap items between two inventory slots. Does not consume tick."""
-        return self.player.swap_inventory_slots(slot1, slot2)
+        result = self.player.swap_inventory_slots(slot1, slot2)
+        if result.get("success") and result.get("mutation_group"):
+            execution = self.game.execute_mutation_group(result["mutation_group"])
+            result["execution"] = execution
+        return result
     
     def get_inventory(self) -> Dict[str, Any]:
         """Get current inventory state"""

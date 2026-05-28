@@ -8,7 +8,7 @@ import os
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from game.world import World
+from game.game import Game
 from game.api import PlayerAPI
 
 def main():
@@ -16,9 +16,9 @@ def main():
     
     # Create world and player
     print("1. Creating world and player...")
-    world = World()
-    player_id, player = world.create_player()
-    api = PlayerAPI(world, player_id)
+    game = Game()
+    player_id, player = game.world.create_player()
+    api = PlayerAPI(game, player_id)
     
     print(f"   Player ID: {player_id}")
     print(f"   Initial position: {api.get_position()}")

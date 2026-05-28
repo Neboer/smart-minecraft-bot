@@ -2,7 +2,7 @@
 """
 Game main module - allows running the game as a module
 """
-from .world import World
+from .game import Game
 from .api import PlayerAPI
 
 def main():
@@ -10,12 +10,13 @@ def main():
     print("Smart Bot Game")
     print("==============")
     
-    # Create world
-    world = World()
+    # Create game/world
+    game = Game()
+    world = game.world
     
     # Create a player
     player_id, player = world.create_player()
-    api = PlayerAPI(world, player_id)
+    api = PlayerAPI(game, player_id)
     
     print(f"Player {player_id} created at {api.get_position()}")
     print(f"Facing {api.get_direction()}")
@@ -27,7 +28,7 @@ def main():
     print("  api.turn('north')")
     print("  api.place_block('sapling')")
     
-    return world, api
+    return game, api
 
 if __name__ == "__main__":
     main()
