@@ -3,7 +3,6 @@
 Game main module - allows running the game as a module
 """
 from .game import Game
-from .api import PlayerAPI
 
 def main():
     """Main entry point for the game"""
@@ -16,19 +15,21 @@ def main():
     
     # Create a player
     player_id, player = world.create_player()
-    api = PlayerAPI(game, player_id)
     
-    print(f"Player {player_id} created at {api.get_position()}")
-    print(f"Facing {api.get_direction()}")
-    print(f"Inventory: {api.get_inventory()}")
+    print(f"Player {player_id} created at {player.get_state()['position']}")
+    print(f"Facing {player.get_state()['direction']}")
+    print(f"Inventory: {player.get_inventory_state()}")
     
-    print("\nGame ready! Use the PlayerAPI to interact with the world.")
+    print("\nGame ready! Submit intents into Game and then call game.tick().")
     print("Example:")
-    print("  api.move_forward()")
-    print("  api.turn('north')")
-    print("  api.place_block('sapling')")
+    print("  game.submit_player_intent(player_id, WalkIntent())")
+    print("  game.tick()")
+    print("  game.submit_player_intent(player_id, TurnIntent('north'))")
+    print("  game.tick()")
+    print("  game.submit_player_intent(player_id, PlaceIntent('sapling'))")
+    print("  game.tick()")
     
-    return game, api
+    return game, player_id, player
 
 if __name__ == "__main__":
     main()

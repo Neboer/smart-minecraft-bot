@@ -99,6 +99,81 @@ class Player:
 
         return True
 
+    def can_reach_position(self, position: Tuple[int, int, int]) -> bool:
+        """Check if a target position is one of the player's directly reachable blocks."""
+        return position in {
+            self.get_facing_block_position(),
+            self.get_facing_block_position_high(),
+            self.get_position_below(),
+        }
+
+    def can_add_item_to_inventory(self, item_type: ItemType, count: int) -> bool:
+        """Dry-run inventory insertion without mutating the inventory."""
+        remaining = count
+
+        for slot in self.inventory:
+            if remaining <= 0:
+                break
+            if slot.item and slot.item.item_type == item_type:
+                can_add = min(remaining, slot.item.max_stack() - slot.item.count)
+                if can_add > 0:
+                    remaining -= can_add
+
+        for slot in self.inventory:
+            if remaining <= 0:
+                break
+            if slot.is_empty():
+                max_stack = Item(item_type, 1).max_stack()
+                to_add = min(remaining, max_stack)
+                remaining -= to_add
+
+        return remaining <= 0
+
+    def resolve_place_position(self, block_type_name: str) -> Optional[Tuple[int, int, int]]:
+        """Return the first legal placement position for a block type, or None."""
+        try:
+            if block_type_name.upper() == "SAPLING":
+                block_type = BlockType.SAPLING
+                item_type = ItemType.SAPLING
+            elif block_type_name.upper() == "PLANK":
+                block_type = BlockType.PLANK
+                item_type = ItemType.PLANK
+            else:
+                return None
+        except ValueError:
+            return None
+
+        if not self.main_hand_item or self.main_hand_item.item_type != item_type:
+            return None
+
+        facing_low = self.get_facing_block_position()
+        facing_high = self.get_facing_block_position_high()
+        below = self.get_position_below()
+
+        for pos in [facing_low, facing_high, below]:
+            x, y, z = pos
+            if not self.is_position_valid(x, y, z):
+                continue
+
+            if self.game_state.get_block(x, y, z) is not None:
+                continue
+
+            if pos == below:
+                if block_type == BlockType.SAPLING:
+                    if z != 0:
+                        continue
+                else:
+                    above_player = (self.x, self.y, self.z + self.height)
+                    if self.game_state.get_block(*above_player):
+                        continue
+
+            if not self.game_state.is_adjacent_to_block(x, y, z):
+                continue
+
+            return pos
+
+        return None
+
     def move_forward(self) -> Dict[str, Any]:
         """Move forward one block in current direction. Costs 1 tick."""
         dx, dy, dz = self.direction.value

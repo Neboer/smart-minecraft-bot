@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Tuple, Optional, Callable, Any
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 
 class Direction(Enum):
@@ -140,24 +140,28 @@ class GameState:
         return False
 
 
-@dataclass
-class Mutation:
-    description: str
-    probability: float
-    apply: Callable[[], Dict[str, Any]]
+from .mutations import (  # noqa: E402  # re-exported compatibility layer
+    Mutation,
+    MutationGroup,
+    MutationGroupSequence,
+    MutationSequence,
+    NoOpMutation,
+    PlayerWarning,
+)
 
 
-@dataclass
-class MutationGroup:
-    mutations: List[Mutation]
-    name: Optional[str] = None
-
-
-@dataclass
-class WorldMutations:
-    groups: List[MutationGroup]
-
-
-@dataclass
-class MutationSequence:
-    mutations: List[Mutation]
+__all__ = [
+    "Direction",
+    "ItemType",
+    "BlockType",
+    "Block",
+    "Item",
+    "InventorySlot",
+    "GameState",
+    "Mutation",
+    "NoOpMutation",
+    "MutationGroup",
+    "MutationSequence",
+    "MutationGroupSequence",
+    "PlayerWarning",
+]

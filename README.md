@@ -62,3 +62,8 @@
 ]
 注意玩家行为也是一个mutation组（现在玩家行为是直接影响世界的，请你修改为提交Mutation），只是确定的——所有世界变化必须通过mutation组提交，不允许擅自修改world，最后Game（当前代码不存在，你需要再抽象一层Game）中每个tick会收集这一tick中产生的所有mutation组，与玩家这一tick输入的Mutation结合（玩家不是每一tick都必须行动的，不行动也是一种行动，比如玩家挖掘木头可能挖掘多个tick），形成一个WorldMutations，每个tick执行之后会返回完整的WorldMutations，然后Game对象会“SelectMutation”，按概率生成出一组MutationSequence表示所有可能的变化的集合，提交给“ExecuteMutation”，执行MutationSequence，将世界变换到下一个确定的状态。
 请你保持程序文件和类文件结构的清晰干净，拆分合理。
+
+## 物理
+
+玩家受重力影响，方块不受重力影响。在每worldtick中，如果玩家脚下没有方块，则玩家高度降低到脚下第一个方块的高度+1.
+当在某种情况下玩家与一个实体方块重合时（比如玩家恰好走到了突然长成的树方块中），玩家会被方块挤开到四周。具体的算法是，
