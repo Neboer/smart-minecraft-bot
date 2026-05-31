@@ -1,42 +1,69 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Dict, Tuple, Optional
-from dataclasses import dataclass
+from typing import Any
+
+
+class Vec3I(tuple[int, int, int]):
+    def __new__(cls, x: int, y: int, z: int) -> "Vec3I":
+        return super().__new__(cls, (x, y, z))
+
+    @property
+    def x(self) -> int:
+        return self[0]
+
+    @property
+    def y(self) -> int:
+        return self[1]
+
+    @property
+    def z(self) -> int:
+        return self[2]
+
+    def __add__(self, other: tuple[int, int, int]) -> "Vec3I":  # type: ignore[override]
+        return Vec3I(self[0] + other[0], self[1] + other[1], self[2] + other[2])
+
+    def __sub__(self, other: tuple[int, int, int]) -> "Vec3I":
+        return Vec3I(self[0] - other[0], self[1] - other[1], self[2] - other[2])
+
+    def __repr__(self) -> str:
+        return f"Vec3I({self[0]}, {self[1]}, {self[2]})"
+
 
 class Direction(Enum):
     EAST = (1, 0, 0)
     SOUTH = (0, 1, 0)
     WEST = (-1, 0, 0)
     NORTH = (0, -1, 0)
-    
+
     @classmethod
-    def from_name(cls, name: str) -> 'Direction':
+    def from_name(cls, name: str) -> "Direction":
         name = name.upper()
-        if name == 'EAST':
-            return cls.EAST
-        elif name == 'SOUTH':
-            return cls.SOUTH
-        elif name == 'WEST':
-            return cls.WEST
-        elif name == 'NORTH':
-            return cls.NORTH
-        else:
-            raise ValueError(f"Invalid direction: {name}")
-    
-    def opposite(self) -> 'Direction':
-        if self == Direction.EAST:
-            return Direction.WEST
-        elif self == Direction.WEST:
-            return Direction.EAST
-        elif self == Direction.SOUTH:
-            return Direction.NORTH
-        elif self == Direction.NORTH:
-            return Direction.SOUTH
-        raise ValueError("Invalid direction")
+        for member in cls:
+            if member.name == name:
+                return member
+        raise ValueError(f"Invalid direction: {name}")
+
+    def opposite(self) -> "Direction":
+        mapping = {
+            Direction.EAST: Direction.WEST,
+            Direction.WEST: Direction.EAST,
+            Direction.SOUTH: Direction.NORTH,
+            Direction.NORTH: Direction.SOUTH,
+        }
+        return mapping[self]
+
+    def as_vec3i(self) -> Vec3I:
+        dx, dy, dz = self.value
+        return Vec3I(dx, dy, dz)
+
 
 class ItemType(Enum):
     SAPLING = "sapling"
     PLANK = "plank"
     WOODEN_AXE = "wooden_axe"
+
 
 class BlockType(Enum):
     SAPLING = "sapling"
@@ -44,13 +71,16 @@ class BlockType(Enum):
     LEAF = "leaf"
 
     def to_item_type(self) -> "ItemType":
-        if self == BlockType.SAPLING:
-            return ItemType.SAPLING
-        if self == BlockType.PLANK:
-            return ItemType.PLANK
-        if self == BlockType.LEAF:
-            return ItemType.SAPLING
-        return ItemType.SAPLING
+        mapping: dict[BlockType, ItemType] = {
+            BlockType.SAPLING: ItemType.SAPLING,
+            BlockType.PLANK: ItemType.PLANK,
+            BlockType.LEAF: ItemType.SAPLING,
+        }
+        return mapping[self]
+
+    def has_entity(self) -> bool:
+        return self in (BlockType.PLANK, BlockType.LEAF)
+
 
 @dataclass
 class Block:
@@ -59,40 +89,42 @@ class Block:
     y: int
     z: int
     has_entity: bool = False
-    break_progress: float = 0.0  # 0.0 to 1.0
-    
-    def __post_init__(self):
-        if self.block_type == BlockType.SAPLING:
-            self.has_entity = False
-        elif self.block_type == BlockType.PLANK:
-            self.has_entity = True
-        elif self.block_type == BlockType.LEAF:
-            self.has_entity = True
+    break_progress: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.has_entity = self.block_type.has_entity()
+
+    @property
+    def position(self) -> Vec3I:
+        return Vec3I(self.x, self.y, self.z)
+
 
 @dataclass
 class Item:
     item_type: ItemType
     count: int = 1
-    
-    def can_stack_with(self, other: 'Item') -> bool:
-        return self.item_type == other.item_type
-    
+
     def max_stack(self) -> int:
-        if self.item_type == ItemType.SAPLING:
-            return 8
-        elif self.item_type == ItemType.PLANK:
-            return 8
-        elif self.item_type == ItemType.WOODEN_AXE:
-            return 1
-        return 1
+        from .data import ITEM_MAX_STACK
+        return ITEM_MAX_STACK[self.item_type]
+
+    def can_stack_with(self, other: "Item") -> bool:
+        return self.item_type == other.item_type
+
+    def to_block_type(self) -> BlockType | None:
+        try:
+            return BlockType(self.item_type.value)
+        except ValueError:
+            return None
+
 
 @dataclass
 class InventorySlot:
-    item: Optional[Item] = None
-    
+    item: Item | None = None
+
     def is_empty(self) -> bool:
         return self.item is None or self.item.count == 0
-    
+
     def can_accept(self, new_item: Item) -> bool:
         if self.is_empty():
             return new_item.count <= new_item.max_stack()
@@ -100,57 +132,66 @@ class InventorySlot:
             return False
         return self.item.count + new_item.count <= self.item.max_stack()
 
+
 class GameState:
-    def __init__(self):
-        self.world_size = 5
-        self.world_center = (
-            self.world_size // 2,
-            self.world_size // 2,
-            self.world_size // 2,
-        )
-        self.blocks: Dict[Tuple[int, int, int], Block] = {}
-        self.tick_count = 0
-        
+    def __init__(self) -> None:
+        self.world_size: int = 5
+        self.blocks: dict[tuple[int, int, int], Block] = {}
+        self.tick_count: int = 0
+
     def add_block(self, block: Block) -> bool:
         pos = (block.x, block.y, block.z)
         if pos in self.blocks:
             return False
-        # Check bounds
         x, y, z = pos
         if not (0 <= x < self.world_size and 0 <= y < self.world_size and 0 <= z < self.world_size):
             return False
         self.blocks[pos] = block
         return True
-    
-    def remove_block(self, x: int, y: int, z: int) -> Optional[Block]:
-        pos = (x, y, z)
-        return self.blocks.pop(pos, None)
-    
-    def get_block(self, x: int, y: int, z: int) -> Optional[Block]:
+
+    def remove_block(self, x: int, y: int, z: int) -> Block | None:
+        return self.blocks.pop((x, y, z), None)
+
+    def get_block(self, x: int, y: int, z: int) -> Block | None:
         return self.blocks.get((x, y, z))
-    
+
     def is_adjacent_to_block(self, x: int, y: int, z: int) -> bool:
-        """Check if position is adjacent to any existing block or on ground level (z=0)"""
         if z == 0:
             return True
-        neighbors = [(x+1,y,z), (x-1,y,z), (x,y+1,z), (x,y-1,z), (x,y,z+1), (x,y,z-1)]
-        for nx, ny, nz in neighbors:
+        for nx, ny, nz in [(x+1,y,z),(x-1,y,z),(x,y+1,z),(x,y-1,z),(x,y,z+1),(x,y,z-1)]:
             if (nx, ny, nz) in self.blocks:
                 return True
         return False
 
 
-from .mutations import (  # noqa: E402  # re-exported compatibility layer
-    Mutation,
-    MutationGroup,
-    MutationGroupSequence,
-    MutationSequence,
-    NoOpMutation,
-    PlayerWarning,
-)
+def _serialize_value(value: object) -> object:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {k: _serialize_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_serialize_value(v) for v in value]
+    return value
+
+
+@dataclass
+class PlayerWarning:
+    player_id: str
+    code: str
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "player_id": self.player_id,
+            "code": self.code,
+            "message": self.message,
+            "details": _serialize_value(self.details),
+        }
 
 
 __all__ = [
+    "Vec3I",
     "Direction",
     "ItemType",
     "BlockType",
@@ -158,10 +199,5 @@ __all__ = [
     "Item",
     "InventorySlot",
     "GameState",
-    "Mutation",
-    "NoOpMutation",
-    "MutationGroup",
-    "MutationSequence",
-    "MutationGroupSequence",
     "PlayerWarning",
 ]

@@ -1,105 +1,55 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, List, Optional
+from typing import Optional, TYPE_CHECKING
 
-from .intents import NoIntent, PlayerIntent
-from .mutations import MutationGroupSequence, MutationSequence, PlayerWarning
+from .intent.no_intent import NoIntent
+from .mutation.base import MutationGroupSequence
 from .world import World
+
+if TYPE_CHECKING:
+    from .intent.base import BaseIntent
 
 
 class Game:
-    def __init__(self, world: Optional[World] = None):
+    def __init__(self, world: Optional[World] = None) -> None:
         self.world = world or World()
-        self._pending_player_intents: Dict[str, PlayerIntent] = {}
+        self._pending_player_intents: dict[str, list[BaseIntent]] = {}
         self.random = random.Random()
 
-    def submit_player_intent(self, player_id: str, intent: PlayerIntent) -> None:
-        """Queue a player intent for the next tick."""
-        self._pending_player_intents[player_id] = intent
+    def submit_player_intent(self, player_id: str, intent: BaseIntent) -> None:
+        """Queue an intent for the player. Multiple intents may be queued;
+        they are processed in order until their combined tick_cost reaches 1.0."""
+        self._pending_player_intents.setdefault(player_id, []).append(intent)
 
-    def _drain_pending_player_intents(self) -> Dict[str, PlayerIntent]:
-        intents = dict(self._pending_player_intents)
-        self._pending_player_intents.clear()
-        return intents
+    def game_base_tick(self) -> MutationGroupSequence:
+        """Build the combined MutationGroupSequence for this tick without mutating the world.
 
-    def _resolve_player_intents(self, player_intents: Optional[Dict[str, PlayerIntent]] = None) -> Dict[str, PlayerIntent]:
-        resolved = self._drain_pending_player_intents()
-        if player_intents:
-            resolved.update(player_intents)
-        return resolved
-
-    def game_base_tick(self, player_intents: Optional[Dict[str, PlayerIntent]] = None) -> Dict[str, Any]:
-        """Build the combined mutation group sequence without mutating the world."""
-        resolved_intents = self._resolve_player_intents(player_intents)
-
-        combined = MutationGroupSequence(groups=[])
-        warnings: List[PlayerWarning] = []
-
-        for player_id, player in self.world.players.items():
-            intent = resolved_intents.pop(player_id, None)
-            if intent is None:
-                intent = NoIntent()
-
-            mutation_space, intent_warnings = intent.build_mutation_group_sequence(self.world, player_id)
-            warnings.extend(intent_warnings)
-            combined = combined.merge(mutation_space)
-
-        for player_id, intent in resolved_intents.items():
-            warnings.append(
-                PlayerWarning(
-                    player_id=player_id,
-                    code="PLAYER_MISSING",
-                    message=f"Player {player_id} not found",
-                    details={"intent": intent.to_dict()},
-                )
-            )
-
-        return {
-            "mutation_group_sequence": combined.merge(self.world.build_mutation_group_sequence()),
-            "player_warnings": warnings,
-        }
-
-    def select_mutation(self, mutation_group_sequence: MutationGroupSequence) -> MutationSequence:
-        return mutation_group_sequence.sample_sequence(self.random)
-
-    def execute_mutation_sequence(self, sequence: MutationSequence) -> Dict[str, Any]:
-        return self.world.apply_mutation_sequence(sequence)
-
-    def world_physics_tick(self) -> Dict[str, Any]:
-        return self.world.do_physics()
-
-    def _serialize_sequence(self, sequence: MutationSequence) -> List[Dict[str, Any]]:
-        return [mutation.to_dict() for mutation in sequence.mutations]
-
-    def _serialize_warnings(self, warnings: List[PlayerWarning]) -> List[Dict[str, Any]]:
-        return [warning.to_dict() for warning in warnings]
-
-    def tick(self, player_intents: Optional[Dict[str, PlayerIntent]] = None) -> Dict[str, Any]:
-        """Advance one game tick.
+        Processes queued intents in submission order, stopping when their total
+        tick_cost would exceed 1.0. Players with no queued intent fall back to NoIntent.
         """
-        base_tick_payload = self.game_base_tick(player_intents=player_intents)
-        mutation_group_sequence = base_tick_payload["mutation_group_sequence"]
+        combined = MutationGroupSequence(groups=[])
 
-        selected_sequence = self.select_mutation(mutation_group_sequence)
-        execution = self.execute_mutation_sequence(selected_sequence)
-        physics = self.world_physics_tick()
+        for player_id in self.world.players:
+            intents = self._pending_player_intents.pop(player_id, None) or [NoIntent()]
+            total_cost = 0.0
+            for intent in intents:
+                cost = intent.tick_cost
+                if total_cost + cost > 1.0:
+                    break
+                combined = combined.merge(
+                    intent.build_mutation_group_sequence(self.world, player_id)
+                )
+                total_cost += cost
+
+        self._pending_player_intents.clear()
+        combined = combined.merge(self.world.build_mutation_group_sequence())
+        return combined
+
+    def tick(self) -> None:
+        """Advance one game tick: build mutations, sample, execute, run physics."""
+        combined = self.game_base_tick()
+        selected = combined.sample_sequence(self.random)
+        self.world.apply_mutation_sequence(selected)
+        self.world.do_physics()
         self.world.game_state.tick_count += 1
-
-        warnings = base_tick_payload["player_warnings"]
-        if warnings:
-            for warning in warnings:
-                print(f"[warning] {warning.player_id} {warning.code}: {warning.message}")
-
-        return {
-            "tick": self.world.game_state.tick_count,
-            "game_base_tick": {
-                "mutation_group_sequence": mutation_group_sequence.to_dict(),
-                "player_warnings": self._serialize_warnings(warnings),
-            },
-            "mutation_group_sequence": mutation_group_sequence.to_dict(),
-            "selected_probability": selected_sequence.probability,
-            "selected_sequence": self._serialize_sequence(selected_sequence),
-            "execution": execution,
-            "physics": physics,
-        }
