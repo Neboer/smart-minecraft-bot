@@ -1,0 +1,67 @@
+# REPL logic test script
+# Starting state: player at (0,0,0) facing EAST, 1 sapling in main hand
+
+status
+
+# == Test 1: dig timing ==
+# Sapling break_time=1.0 -> should break in exactly 1 dig (not 2)
+
+place low
+# Expected: sapling at (1,0,0); main hand empty
+
+status
+
+dig low
+# Expected: block gone, sapling returned to inventory; no "Breaking:" in status
+
+status
+
+# == Test 2: noop ==
+noop
+# Expected: tick advances, world unchanged
+
+status
+
+# == Test 3: place down ==
+# Sapling is non-solid (has_entity=False) so no physics lift.
+# Block should appear at (0,0,0) = player's feet level.
+
+place down
+# Expected: sapling placed at (0,0,0), player still at (0,0,0), main hand empty
+
+status
+
+# == Test 4: turn directions (full right-turn circle) ==
+# Convention: right = counter-clockwise from above (EAST->NORTH->WEST->SOUTH->EAST)
+
+turn right
+# Expected: Facing NORTH
+
+status
+
+turn right
+# Expected: Facing WEST
+
+status
+
+turn right
+# Expected: Facing SOUTH
+
+status
+
+turn right
+# Expected: Facing EAST (full circle)
+
+status
+
+turn left
+# Expected: Facing SOUTH
+
+status
+
+turn back
+# Expected: Facing NORTH
+
+status
+
+quit

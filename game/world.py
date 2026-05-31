@@ -94,7 +94,7 @@ class World:
             return False
         if self.game_state.get_block(x, y, z) is not None:
             return False
-        if position == player.get_position_below():
+        if position == player.get_place_down_position():
             if block_type == BlockType.SAPLING:
                 if z != 0:
                     return False

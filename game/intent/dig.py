@@ -38,7 +38,7 @@ class DigIntent(BaseIntent):
         if block is None:
             return MutationGroupSequence(groups=[])
 
-        # Continuing or finishing an active dig
+        # ── Ongoing dig (block already started) ──────────────────────────────
         if player.breaking_block == target and player.break_target_time > 0.0:
             if player.break_progress + 1.0 >= player.break_target_time:
                 drop_options = BLOCK_DROP_OPTIONS[block.block_type]
@@ -49,15 +49,11 @@ class DigIntent(BaseIntent):
                         drop_item_type=item_type,
                         drop_count=count,
                     )
-                    for count, prob, item_type in drop_options
+                    for count, _, item_type in drop_options
                 ]
-                weights: list[float] = [prob for count, prob, item_type in drop_options]
+                weights: list[float] = [prob for _, prob, _ in drop_options]
                 return MutationGroupSequence(groups=[
-                    MutationGroup(
-                        mutations=mutations,
-                        weights=weights,
-                        name=f"dig_finish:{player_id}",
-                    )
+                    MutationGroup(mutations=mutations, weights=weights, name=f"dig_finish:{player_id}")
                 ])
             else:
                 return MutationGroupSequence(groups=[
@@ -67,7 +63,10 @@ class DigIntent(BaseIntent):
                     )
                 ])
 
-        # Starting a new dig
+        # ── New dig ───────────────────────────────────────────────────────────
+        # The begin tick counts as 1 unit of work. We emit Begin as the first
+        # group and Finish (if break_time ≤ 1) or Continue as the second group,
+        # both executing in the same tick so a 1-tick block breaks immediately.
         break_time = BLOCK_BREAK_TIME[block.block_type]
         if (
             player.main_hand_item is not None
@@ -76,9 +75,34 @@ class DigIntent(BaseIntent):
         ):
             break_time *= AXE_BREAK_MULTIPLIER
 
-        return MutationGroupSequence(groups=[
+        drop_options = BLOCK_DROP_OPTIONS[block.block_type]
+        groups: list[MutationGroup] = [
             MutationGroup(
                 mutations=[BeginDigMutation(player_id, target, break_time)],
                 name=f"dig_begin:{player_id}",
             )
-        ])
+        ]
+
+        # Second group: finish if break_time ≤ 1 (single-tick block), else continue.
+        if break_time <= 1.0:
+            finish_mutations: list[BaseMutation] = [
+                FinishDigMutation(
+                    player_id=player_id,
+                    target=target,
+                    drop_item_type=item_type,
+                    drop_count=count,
+                )
+                for count, _, item_type in drop_options
+            ]
+            finish_weights: list[float] = [prob for _, prob, _ in drop_options]
+            groups.append(MutationGroup(
+                mutations=finish_mutations, weights=finish_weights,
+                name=f"dig_finish:{player_id}",
+            ))
+        else:
+            groups.append(MutationGroup(
+                mutations=[ContinueDigMutation(player_id, target)],
+                name=f"dig_continue:{player_id}",
+            ))
+
+        return MutationGroupSequence(groups=groups)

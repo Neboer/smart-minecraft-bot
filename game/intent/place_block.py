@@ -41,7 +41,7 @@ class PlaceBlockIntent(BaseIntent):
         if main_hand is None or main_hand.item_type != self.block_type.to_item_type():
             return MutationGroupSequence(groups=groups)
 
-        if not player.can_reach_position(self.position):
+        if not player.can_place_at(self.position):
             return MutationGroupSequence(groups=groups)
 
         if not world.is_valid_place_position(player, self.position, self.block_type):
