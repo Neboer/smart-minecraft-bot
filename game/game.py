@@ -12,10 +12,29 @@ if TYPE_CHECKING:
 
 
 class Game:
-    def __init__(self, world: Optional[World] = None) -> None:
+    def __init__(
+        self,
+        world: Optional[World] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        self._seed = seed
         self.world = world or World()
         self._pending_player_intents: dict[str, list[BaseIntent]] = {}
-        self.random = random.Random()
+        self.random = random.Random(seed)
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        """Reset to an empty world with a fresh RNG.
+
+        After calling this, the caller must re-create players via
+        world.create_player().  Pass seed to change the random seed;
+        omit to reuse the seed given at construction (or None for
+        non-deterministic behaviour).
+        """
+        if seed is not None:
+            self._seed = seed
+        self.world = World()
+        self.random = random.Random(self._seed)
+        self._pending_player_intents.clear()
 
     def submit_player_intent(self, player_id: str, intent: BaseIntent) -> None:
         """Queue an intent for the player. Multiple intents may be queued;

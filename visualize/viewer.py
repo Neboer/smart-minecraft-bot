@@ -407,4 +407,4 @@ def run_visualizer(
     WorldWindow.player = player
     WorldWindow.game = game
     WorldWindow.world_lock = world_lock or threading.Lock()
-    mglw.run_window_config(WorldWindow)
+    mglw.run_window_config(WorldWindow, args=[])
