@@ -1,3 +1,0 @@
-# For Reinforcement Learning
-gymnasium
-stable_baselines3

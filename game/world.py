@@ -51,10 +51,10 @@ class World:
         x, y, z = target
         if not self.is_position_valid(x, y, z):
             return False
-        if z + player.height > self.game_state.world_size:
+        if y + player.height > self.game_state.world_size:
             return False
         for h in range(player.height):
-            block = self.game_state.get_block(x, y, z + h)
+            block = self.game_state.get_block(x, y + h, z)
             if block is not None and block.has_entity:
                 return False
         return True
@@ -68,15 +68,15 @@ class World:
         x, y, z = target
         if not self.is_position_valid(x, y, z):
             return False
-        if z + player.height > self.game_state.world_size:
+        if y + player.height > self.game_state.world_size:
             return False
-        if z < 1:
+        if y < 1:
             return False
-        below = self.game_state.get_block(x, y, z - 1)
+        below = self.game_state.get_block(x, y - 1, z)
         if below is None or not below.has_entity:
             return False
         for h in range(player.height):
-            block = self.game_state.get_block(x, y, z + h)
+            block = self.game_state.get_block(x, y + h, z)
             if block is not None and block.has_entity:
                 return False
         return True
@@ -96,10 +96,10 @@ class World:
             return False
         if position == player.get_position():
             if block_type == BlockType.SAPLING:
-                if z != 0:
+                if y != 0:
                     return False
             else:
-                above = Vec3I(player.x, player.y, player.z + player.height)
+                above = Vec3I(player.x, player.y + player.height, player.z)
                 if self.game_state.get_block(*above) is not None:
                     return False
         if not self.game_state.is_adjacent_to_block(x, y, z):
@@ -110,23 +110,23 @@ class World:
 
     def can_sapling_grow(self, position: Vec3I, trunk_height: int) -> bool:
         x, y, z = position
-        if z != 0:
+        if y != 0:
             return False
         sapling = self.game_state.get_block(x, y, z)
         if sapling is None or sapling.block_type != BlockType.SAPLING:
             return False
-        neighbor_xy = {(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)}
+        neighbor_xz = {(x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)}
         for other_pos in self.game_state.blocks:
             if other_pos == (x, y, z):
                 continue
-            ox, oy, _ = other_pos
-            if (ox, oy) == (x, y) or (ox, oy) in neighbor_xy:
+            ox, _, oz = other_pos
+            if (ox, oz) == (x, z) or (ox, oz) in neighbor_xz:
                 return False
         for height in range(trunk_height):
-            b = self.game_state.get_block(x, y, z + height)
+            b = self.game_state.get_block(x, y + height, z)
             if b is not None and b is not sapling:
                 return False
-        return self.game_state.get_block(x, y, z + trunk_height) is None
+        return self.game_state.get_block(x, y + trunk_height, z) is None
 
     # ── World mutation groups ────────────────────────────────────────────────
 
@@ -143,17 +143,17 @@ class World:
 
     def _can_attempt_tree_growth(self, position: Vec3I) -> bool:
         x, y, z = position
-        if z != 0:
+        if y != 0:
             return False
         sapling = self.game_state.get_block(x, y, z)
         if sapling is None or sapling.block_type != BlockType.SAPLING:
             return False
-        neighbor_xy = {(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)}
+        neighbor_xz = {(x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)}
         for other_pos in self.game_state.blocks:
             if other_pos == (x, y, z):
                 continue
-            ox, oy, _ = other_pos
-            if (ox, oy) == (x, y) or (ox, oy) in neighbor_xy:
+            ox, _, oz = other_pos
+            if (ox, oz) == (x, z) or (ox, oz) in neighbor_xz:
                 return False
         return True
 
@@ -204,36 +204,36 @@ class World:
     # ── Physics ──────────────────────────────────────────────────────────────
 
     def _player_has_support(self, player: Player) -> bool:
-        if player.z <= 0:
+        if player.y <= 0:
             return True
-        below = self.game_state.get_block(player.x, player.y, player.z - 1)
+        below = self.game_state.get_block(player.x, player.y - 1, player.z)
         return below is not None and below.has_entity
 
     def _can_fit_player_at(self, player: Player, x: int, y: int, z: int) -> bool:
         if x < 0 or y < 0 or z < 0:
             return False
         ws = self.game_state.world_size
-        if x >= ws or y >= ws or z + player.height > ws:
+        if x >= ws or y + player.height > ws or z >= ws:
             return False
         for h in range(player.height):
-            block = self.game_state.get_block(x, y, z + h)
+            block = self.game_state.get_block(x, y + h, z)
             if block is not None and block.has_entity:
                 return False
         return True
 
     def _apply_gravity_to_player(self, player: Player) -> bool:
         changed = False
-        while player.z > 0 and not self._player_has_support(player):
-            player.z -= 1
+        while player.y > 0 and not self._player_has_support(player):
+            player.y -= 1
             changed = True
         return changed
 
     def _clamp_player_to_bounds(self, player: Player) -> bool:
         ws = self.game_state.world_size
-        max_z = max(0, ws - player.height)
+        max_y = max(0, ws - player.height)
         nx = min(max(player.x, 0), ws - 1)
-        ny = min(max(player.y, 0), ws - 1)
-        nz = min(max(player.z, 0), max_z)
+        ny = min(max(player.y, 0), max_y)
+        nz = min(max(player.z, 0), ws - 1)
         if (nx, ny, nz) != (player.x, player.y, player.z):
             player.x, player.y, player.z = nx, ny, nz
             return True
@@ -243,7 +243,7 @@ class World:
         if self._can_fit_player_at(player, player.x, player.y, player.z):
             return False
         ws = self.game_state.world_size
-        max_z = ws - player.height
+        max_y = ws - player.height
         start = (player.x, player.y, player.z)
         visited = {start}
         queue: deque[tuple[int, int, int]] = deque([start])
@@ -256,7 +256,7 @@ class World:
                 return True
             for dx, dy, dz in directions:
                 nx, ny, nz = x + dx, y + dy, z + dz
-                if nx < 0 or ny < 0 or nz < 0 or nx >= ws or ny >= ws or nz > max_z:
+                if nx < 0 or ny < 0 or nz < 0 or nx >= ws or ny > max_y or nz >= ws:
                     continue
                 candidate = (nx, ny, nz)
                 if candidate not in visited:
@@ -274,7 +274,7 @@ class World:
                 return False
             if not (0 <= player.x < ws and 0 <= player.y < ws):
                 return False
-            if not (0 <= player.z <= ws - player.height):
+            if not (0 <= player.y <= ws - player.height):
                 return False
         return True
 

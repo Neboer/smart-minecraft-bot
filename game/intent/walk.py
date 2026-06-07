@@ -32,9 +32,9 @@ class WalkIntent(BaseIntent):
                 name=f"abandon:{player_id}",
             ))
 
-        dx, dy, _ = player.direction.value
-        same_level = Vec3I(player.x + dx, player.y + dy, player.z)
-        step_up = Vec3I(player.x + dx, player.y + dy, player.z + 1)
+        dx, _, dz = player.direction.value
+        same_level = Vec3I(player.x + dx, player.y, player.z + dz)
+        step_up = Vec3I(player.x + dx, player.y + 1, player.z + dz)
 
         if world.can_player_move_to(player, same_level):
             target = same_level

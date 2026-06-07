@@ -68,28 +68,28 @@ class Player:
     # ── Facing geometry ──────────────────────────────────────────────────────
 
     def get_facing_block_position(self) -> Vec3I:
-        dx, dy, _ = self.direction.value
-        return Vec3I(self.x + dx, self.y + dy, self.z)
+        dx, _, dz = self.direction.value
+        return Vec3I(self.x + dx, self.y, self.z + dz)
 
     def get_facing_block_position_high(self) -> Vec3I:
-        dx, dy, _ = self.direction.value
-        return Vec3I(self.x + dx, self.y + dy, self.z + 1)
+        dx, _, dz = self.direction.value
+        return Vec3I(self.x + dx, self.y + 1, self.z + dz)
 
     def get_position(self) -> Vec3I:
         return Vec3I(self.x, self.y, self.z)
 
     def get_position_below(self) -> Vec3I:
         """One block below the player's feet. Used for dig-down target."""
-        return Vec3I(self.x, self.y, self.z - 1)
-    
+        return Vec3I(self.x, self.y - 1, self.z)
+
     def get_position_above(self) -> Vec3I:
         """One block above the player's head. Used for dig-up target."""
-        return Vec3I(self.x, self.y, self.z + self.height)
-    
+        return Vec3I(self.x, self.y + self.height, self.z)
+
     def get_down_front_position(self) -> Vec3I:
-        """向玩家脚下前方一格放方块，“搭桥”。"""
-        dx, dy, _ = self.direction.value
-        return Vec3I(self.x + dx, self.y + dy, self.z - 1)
+        """向玩家脚下前方一格放方块，"搭桥"。"""
+        dx, _, dz = self.direction.value
+        return Vec3I(self.x + dx, self.y - 1, self.z + dz)
 
     # 可以挖去哪些位置的方块
     def can_reach_position(self, position: tuple[int, int, int]) -> bool:

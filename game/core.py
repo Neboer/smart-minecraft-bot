@@ -33,9 +33,9 @@ class Vec3I(tuple[int, int, int]):
 
 class Direction(Enum):
     EAST = (1, 0, 0)
-    SOUTH = (0, 1, 0)
+    SOUTH = (0, 0, 1)
     WEST = (-1, 0, 0)
-    NORTH = (0, -1, 0)
+    NORTH = (0, 0, -1)
 
     @classmethod
     def from_name(cls, name: str) -> "Direction":
@@ -156,7 +156,7 @@ class GameState:
         return self.blocks.get((x, y, z))
 
     def is_adjacent_to_block(self, x: int, y: int, z: int) -> bool:
-        if z == 0:
+        if y == 0:
             return True
         for nx, ny, nz in [(x+1,y,z),(x-1,y,z),(x,y+1,z),(x,y-1,z),(x,y,z+1),(x,y,z-1)]:
             if (nx, ny, nz) in self.blocks:

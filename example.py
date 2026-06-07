@@ -17,17 +17,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from game.core import BlockType, Item, ItemType
 from game.intent import (
     BaseIntent,
+    ChangeActiveSlotIntent,
     CraftAxeIntent,
     DigIntent,
-    NoIntent,
+    DropOneIntent,
+    DropStackIntent,
     PlaceBlockIntent,
-    SwapInventoryIntent,
     TurnIntent,
     WalkIntent,
 )
 from game.game import Game
 from game.player import Player
-from visualize import run_visualizer
 
 
 def build_empty_game() -> tuple[Game, str, Player]:
@@ -70,23 +70,25 @@ def run_player_smoke_tests(verbose: bool = True) -> None:
 
     submit_and_tick(game, player_id, WalkIntent())
     _check("second move tick 3", game.world.game_state.tick_count == 3, verbose)
-    _check("second move changes position", (player.x, player.y, player.z) == (1, 1, 0), verbose)
+    _check("second move changes position", (player.x, player.y, player.z) == (1, 0, 1), verbose)
 
-    # Swap inventory
-    submit_and_tick(game, player_id, SwapInventoryIntent(slot1=0, slot2=1))
-    _check("swap tick 4", game.world.game_state.tick_count == 4, verbose)
-    _check("slot 0 empty after swap", player.inventory[0].is_empty(), verbose)
-    _check("slot 1 has sapling after swap", player.inventory[1].item.item_type == ItemType.SAPLING, verbose)
+    # Change active slot (0-tick intent)
+    submit_and_tick(game, player_id, ChangeActiveSlotIntent(1))
+    _check("change slot tick 4", game.world.game_state.tick_count == 4, verbose)
+    _check("active slot is 1", player.main_hand_slot == 1, verbose)
+    _check("main hand empty after slot change", player.main_hand_item is None, verbose)
+    _check("slot 0 still has sapling", player.inventory[0].item.item_type == ItemType.SAPLING, verbose)
 
-    # Restore sapling to main hand
-    player.inventory[0].item = Item(ItemType.SAPLING, 1)
-    player.inventory[1].item = None
+    submit_and_tick(game, player_id, ChangeActiveSlotIntent(0))
+    _check("change slot back tick 5", game.world.game_state.tick_count == 5, verbose)
+    _check("active slot is 0", player.main_hand_slot == 0, verbose)
+    _check("main hand has sapling", player.main_hand_item.item_type == ItemType.SAPLING, verbose)
 
     # Place block — player is at (1,1,0) facing south; facing position is (1,2,0)
     placed_position = player.get_facing_block_position()
     submit_and_tick(game, player_id, PlaceBlockIntent(BlockType.SAPLING, placed_position))
-    _check("place block tick 5", game.world.game_state.tick_count == 5, verbose)
-    placed_position = (1, 2, 0)
+    _check("place block tick 6", game.world.game_state.tick_count == 6, verbose)
+    placed_position = (1, 0, 2)
     _check(
         "sapling placed",
         game.world.game_state.get_block(*placed_position) is not None,
@@ -99,7 +101,7 @@ def run_player_smoke_tests(verbose: bool = True) -> None:
     # Craft axe
     player.inventory[0].item = Item(ItemType.PLANK, 3)
     submit_and_tick(game, player_id, CraftAxeIntent())
-    _check("craft axe tick 6", game.world.game_state.tick_count == 6, verbose)
+    _check("craft axe tick 7", game.world.game_state.tick_count == 7, verbose)
     _check(
         "wooden axe in main hand",
         player.main_hand_item is not None and player.main_hand_item.item_type == ItemType.WOODEN_AXE,
@@ -108,16 +110,16 @@ def run_player_smoke_tests(verbose: bool = True) -> None:
 
     # Digging: add a plank block and break it
     submit_and_tick(game, player_id, TurnIntent(direction="east"))
-    target = (2, 1, 0)
+    target = (2, 0, 1)
     _check("facing east for digging", player.get_facing_block_position() == target, verbose)
     game.world.add_block(BlockType.PLANK, *target)
     _check("plank added for digging", game.world.game_state.get_block(*target) is not None, verbose)
 
     submit_and_tick(game, player_id, DigIntent(target_position=target))
-    _check("start breaking tick 8", game.world.game_state.tick_count == 8, verbose)
+    _check("start breaking tick 9", game.world.game_state.tick_count == 9, verbose)
     _check("player breaking plank", player.breaking_block == target, verbose)
 
-    expected_tick = 8
+    expected_tick = 9
     safety_limit = 6
     while player.breaking_block is not None and safety_limit > 0:
         expected_tick += 1
@@ -134,43 +136,68 @@ def run_player_smoke_tests(verbose: bool = True) -> None:
     _check("dig state cleared", player.breaking_block is None, verbose)
     _check("tick count correct", game.world.game_state.tick_count == expected_tick, verbose)
 
+    # Drop one item
+    player.inventory[0].item = Item(ItemType.PLANK, 3)
+    submit_and_tick(game, player_id, DropOneIntent())
+    _check("drop one decrements count", player.inventory[0].item is not None and player.inventory[0].item.count == 2, verbose)
+
+    # Drop full stack
+    submit_and_tick(game, player_id, DropStackIntent())
+    _check("drop stack clears slot", player.inventory[0].is_empty(), verbose)
+
+    # Pillar-up: place a plank at own feet to raise player by 1
+    player.inventory[0].item = Item(ItemType.PLANK, 1)
+    pillar_from = player.get_position()          # (1, 0, 1)
+    submit_and_tick(game, player_id, PlaceBlockIntent(BlockType.PLANK, pillar_from))
+    _check(
+        "pillar block placed at old feet",
+        game.world.game_state.get_block(*pillar_from) is not None,
+        verbose,
+    )
+    _check(
+        "player raised by 1 after pillar",
+        (player.x, player.y, player.z) == (pillar_from.x, pillar_from.y + 1, pillar_from.z),
+        verbose,
+    )
+    _check("player has support after pillar", player.y > 0, verbose)
+
     if verbose:
         print("\nAll smoke tests passed.")
 
 
-def run_preview_mode() -> None:
-    game, player_id, player = build_empty_game()
-    action_cycle = cycle([
-        WalkIntent(),
-        TurnIntent(direction="south"),
-        WalkIntent(),
-        TurnIntent(direction="west"),
-        WalkIntent(),
-        NoIntent(),
-    ])
+# def run_preview_mode() -> None:
+#     game, player_id, player = build_empty_game()
+#     action_cycle = cycle([
+#         WalkIntent(),
+#         TurnIntent(direction="south"),
+#         WalkIntent(),
+#         TurnIntent(direction="west"),
+#         WalkIntent(),
+#         NoIntent(),
+#     ])
 
-    stop_event = threading.Event()
+#     stop_event = threading.Event()
 
-    def submit_actions() -> None:
-        for intent in action_cycle:
-            if stop_event.is_set():
-                return
-            game.submit_player_intent(player_id, intent)
-            time.sleep(1.0)
+#     def submit_actions() -> None:
+#         for intent in action_cycle:
+#             if stop_event.is_set():
+#                 return
+#             game.submit_player_intent(player_id, intent)
+#             time.sleep(1.0)
 
-    thread = threading.Thread(target=submit_actions, daemon=True)
-    thread.start()
-    try:
-        run_visualizer(game.world, player, game)
-    finally:
-        stop_event.set()
+#     thread = threading.Thread(target=submit_actions, daemon=True)
+#     thread.start()
+#     try:
+#         run_visualizer(game.world, player, game)
+#     finally:
+#         stop_event.set()
 
 
 def main() -> None:
-    if len(sys.argv) > 1 and sys.argv[1].lower() == "preview":
-        print("=== Smart Bot Preview Mode ===\n")
-        run_preview_mode()
-        return
+    # if len(sys.argv) > 1 and sys.argv[1].lower() == "preview":
+    #     print("=== Smart Bot Preview Mode ===\n")
+    #     run_preview_mode()
+    #     return
     print("=== Smart Bot Player Smoke Tests ===\n")
     run_player_smoke_tests(verbose=True)
 

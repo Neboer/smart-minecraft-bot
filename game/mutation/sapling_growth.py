@@ -35,5 +35,5 @@ class SaplingGrowthMutation(BaseMutation):
         x, y, z = self.position
         world.game_state.remove_block(x, y, z)
         for height in range(self.trunk_height):
-            world.game_state.add_block(Block(BlockType.PLANK, x, y, z + height))
-        world.game_state.add_block(Block(BlockType.LEAF, x, y, z + self.trunk_height))
+            world.game_state.add_block(Block(BlockType.PLANK, x, y + height, z))
+        world.game_state.add_block(Block(BlockType.LEAF, x, y + self.trunk_height, z))

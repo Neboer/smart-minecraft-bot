@@ -27,9 +27,14 @@ class PlaceBlockMutation(SinglePlayerBaseMutation):
     def execute(self, world: World) -> None:
         player = world.get_player(self.player_id)
         assert player is not None
-        world.game_state.add_block(Block(self.block_type, *self.position))
+        placed = Block(self.block_type, *self.position)
+        world.game_state.add_block(placed)
         main_hand_item = player.inventory[player.main_hand_slot].item
         if main_hand_item is not None:
             main_hand_item.count -= 1
             if main_hand_item.count <= 0:
                 player.inventory[player.main_hand_slot].item = None
+        # Pillar-up: block placed at player's own feet raises player by 1 before physics.
+        # Without this, physics BFS would move the player sideways instead of upward.
+        if placed.has_entity and self.position == player.get_position():
+            player.y += 1
