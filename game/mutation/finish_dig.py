@@ -33,9 +33,7 @@ class FinishDigMutation(SinglePlayerBaseMutation):
             return False
         if player.breaking_block != self.target:
             return False
-        if player.break_progress + 1.0 < player.break_target_time:
-            return False
-        return player.can_add_item_to_inventory(self.drop_item_type, self.drop_count)
+        return player.break_progress + 1.0 >= player.break_target_time
 
     def execute(self, world: World) -> None:
         player = world.get_player(self.player_id)

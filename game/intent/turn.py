@@ -13,6 +13,10 @@ if TYPE_CHECKING:
 
 
 class TurnIntent(BaseIntent):
+    @property
+    def tick_cost(self) -> float:
+        return 0.0
+
     def __init__(self, direction: Direction | str) -> None:
         if isinstance(direction, str):
             self.direction = Direction.from_name(direction)

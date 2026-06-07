@@ -13,7 +13,8 @@ from .begin_dig import BeginDigMutation
 from .continue_dig import ContinueDigMutation
 from .finish_dig import FinishDigMutation
 from .place_block import PlaceBlockMutation
-from .swap_inventory import SwapInventoryMutation
+from .change_active_slot import ChangeActiveSlotMutation
+from .drop_item import DropOneMutation, DropStackMutation
 from .craft_axe import CraftAxeMutation
 from .sapling_growth import SaplingIdleGrowthMutation, SaplingGrowthMutation
 
@@ -31,7 +32,9 @@ __all__ = [
     "ContinueDigMutation",
     "FinishDigMutation",
     "PlaceBlockMutation",
-    "SwapInventoryMutation",
+    "ChangeActiveSlotMutation",
+    "DropOneMutation",
+    "DropStackMutation",
     "CraftAxeMutation",
     "SaplingIdleGrowthMutation",
     "SaplingGrowthMutation",

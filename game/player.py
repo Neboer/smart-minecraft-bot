@@ -46,7 +46,8 @@ class Player:
         self.z = z
         self.direction = direction
         self.height = 2
-        self.maximum_inventory_slots = 10
+        self.maximum_inventory_slots = 9
+        self._active_slot: int = 0
         self.inventory: list[InventorySlot] = [
             InventorySlot() for _ in range(self.maximum_inventory_slots)
         ]
@@ -58,7 +59,7 @@ class Player:
 
     @property
     def main_hand_slot(self) -> int:
-        return 0
+        return self._active_slot
 
     @property
     def main_hand_item(self) -> Optional[Item]:
@@ -98,6 +99,7 @@ class Player:
             self.get_facing_block_position_high(),
             self.get_position_below(),
             self.get_position_above(),
+            self.get_down_front_position(),
         }
 
     # 可以放置方块到哪些位置

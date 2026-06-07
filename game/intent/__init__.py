@@ -4,7 +4,8 @@ from .walk import WalkIntent
 from .turn import TurnIntent
 from .dig import DigIntent
 from .place_block import PlaceBlockIntent
-from .swap_inventory import SwapInventoryIntent
+from .change_active_slot import ChangeActiveSlotIntent
+from .drop_item import DropOneIntent, DropStackIntent
 from .craft_axe import CraftAxeIntent
 
 __all__ = [
@@ -14,6 +15,8 @@ __all__ = [
     "TurnIntent",
     "DigIntent",
     "PlaceBlockIntent",
-    "SwapInventoryIntent",
+    "ChangeActiveSlotIntent",
+    "DropOneIntent",
+    "DropStackIntent",
     "CraftAxeIntent",
 ]
