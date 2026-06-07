@@ -74,31 +74,41 @@ class Player:
         dx, dy, _ = self.direction.value
         return Vec3I(self.x + dx, self.y + dy, self.z + 1)
 
+    def get_position(self) -> Vec3I:
+        return Vec3I(self.x, self.y, self.z)
+
     def get_position_below(self) -> Vec3I:
         """One block below the player's feet. Used for dig-down target."""
         return Vec3I(self.x, self.y, self.z - 1)
+    
+    def get_position_above(self) -> Vec3I:
+        """One block above the player's head. Used for dig-up target."""
+        return Vec3I(self.x, self.y, self.z + self.height)
+    
+    def get_down_front_position(self) -> Vec3I:
+        """向玩家脚下前方一格放方块，“搭桥”。"""
+        dx, dy, _ = self.direction.value
+        return Vec3I(self.x + dx, self.y + dy, self.z - 1)
 
-    def get_place_down_position(self) -> Vec3I:
-        """The player's feet level. Used for place-down target.
-
-        Placing a solid block here causes physics to push the player up by 1.
-        """
-        return Vec3I(self.x, self.y, self.z)
-
+    # 可以挖去哪些位置的方块
     def can_reach_position(self, position: tuple[int, int, int]) -> bool:
         """Reachable positions for digging (includes the block one below feet)."""
         return position in {
             self.get_facing_block_position(),
             self.get_facing_block_position_high(),
             self.get_position_below(),
+            self.get_position_above(),
         }
 
+    # 可以放置方块到哪些位置
     def can_place_at(self, position: tuple[int, int, int]) -> bool:
         """Reachable positions for placing (down targets feet level, not z-1)."""
         return position in {
             self.get_facing_block_position(),
             self.get_facing_block_position_high(),
-            self.get_place_down_position(),
+            self.get_position(), # 玩家向自己身体所在坐标放方块，自己站在上面，给自己垫高一格。
+            self.get_down_front_position(),
+            self.get_position_above(),
         }
 
     # ── Inventory ────────────────────────────────────────────────────────────
