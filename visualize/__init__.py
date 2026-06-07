@@ -1,5 +1,11 @@
-"""Visualization layer for rendering the world state."""
+"""Visualization layer — Raylib-based 3D renderer."""
 
-from .viewer import run_visualizer
+from .raylib import RaylibViewer, run_human_viewer, run_ai_viewer, ExternalIntentSource, HumanIntentSource
 
-__all__ = ["run_visualizer"]
+__all__ = [
+    "RaylibViewer",
+    "run_human_viewer",
+    "run_ai_viewer",
+    "ExternalIntentSource",
+    "HumanIntentSource",
+]

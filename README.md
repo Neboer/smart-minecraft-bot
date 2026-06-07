@@ -16,12 +16,6 @@ AI 可视化演示（回放 example.py 序列）：
 python visual_example.py
 ```
 
-命令行 REPL 客户端：
-
-```bash
-python -m interactive.human.replplayer
-```
-
 冒烟测试（开发用）：
 
 ```bash
